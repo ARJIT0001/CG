@@ -1,0 +1,115 @@
+#include <iostream.h>
+#include <graphics.h>
+#include <conio.h>
+
+// 4-bit region outcodes (TBRL: Top, Bottom, Right, Left)
+#define INSIDE 0  // 0000
+#define LEFT   1  // 0001
+#define RIGHT  2  // 0010
+#define BOTTOM 4  // 0100
+#define TOP    8  // 1000
+
+// Clipping window boundaries
+const float WIN_XMIN = 100.0;
+const float WIN_YMIN = 100.0;
+const float WIN_XMAX = 400.0;
+const float WIN_YMAX = 250.0;
+
+// Assigns a 4-bit outcode to a point (x, y) relative to the clipping window
+int getOutcode(float x, float y) {
+    int code = INSIDE;
+
+    if (x < WIN_XMIN)
+        code |= LEFT;
+    else if (x > WIN_XMAX)
+        code |= RIGHT;
+
+    if (y < WIN_YMIN)
+        code |= BOTTOM;
+    else if (y > WIN_YMAX)
+        code |= TOP;
+
+    return code;
+}
+
+// Clips a line segment from (x1, y1) to (x2, y2) and renders visible/clipped parts
+void clipLine(float x1, float y1, float x2, float y2) {
+    int outcode1 = getOutcode(x1, y1);
+    int outcode2 = getOutcode(x2, y2);
+    int visible = 0;
+
+    while (1) {
+        if ((outcode1 == 0) && (outcode2 == 0)) {
+            // Both endpoints lie inside the clipping window
+            visible = 1;
+            break;
+        } else if ((outcode1 & outcode2) != 0) {
+            // Both endpoints share an outside region (trivially rejected)
+            break;
+        } else {
+            // At least one endpoint lies outside; find intersection
+            float ix, iy;
+            int outsideCode = (outcode1 != 0) ? outcode1 : outcode2;
+
+            if (outsideCode & TOP) {
+                ix = x1 + (x2 - x1) * (WIN_YMAX - y1) / (y2 - y1);
+                iy = WIN_YMAX;
+            } else if (outsideCode & BOTTOM) {
+                ix = x1 + (x2 - x1) * (WIN_YMIN - y1) / (y2 - y1);
+                iy = WIN_YMIN;
+            } else if (outsideCode & RIGHT) {
+                iy = y1 + (y2 - y1) * (WIN_XMAX - x1) / (x2 - x1);
+                ix = WIN_XMAX;
+            } else if (outsideCode & LEFT) {
+                iy = y1 + (y2 - y1) * (WIN_XMIN - x1) / (x2 - x1);
+                ix = WIN_XMIN;
+            }
+
+            // Draw the trimmed outside segment in RED and update the endpoint
+            setcolor(RED);
+            if (outsideCode == outcode1) {
+                line((int)x1, (int)y1, (int)ix, (int)iy);
+                x1 = ix;
+                y1 = iy;
+                outcode1 = getOutcode(x1, y1);
+            } else {
+                line((int)x2, (int)y2, (int)ix, (int)iy);
+                x2 = ix;
+                y2 = iy;
+                outcode2 = getOutcode(x2, y2);
+            }
+        }
+    }
+
+    // Draw the final accepted segment in GREEN or fully rejected line in RED
+    if (visible) {
+        setcolor(GREEN);
+        line((int)x1, (int)y1, (int)x2, (int)y2);
+    } else {
+        setcolor(RED);
+        line((int)x1, (int)y1, (int)x2, (int)y2);
+    }
+}
+
+void main() {
+    int gd = DETECT, gm;
+    initgraph(&gd, &gm, "C:\\TURBOC3\\BGI");
+
+    setbkcolor(WHITE);
+    setcolor(BLUE);
+
+    // Draw the clipping window
+    rectangle((int)WIN_XMIN, (int)WIN_YMIN, (int)WIN_XMAX, (int)WIN_YMAX);
+
+    // Case 1: Partially inside line
+    clipLine(70, 70, 180, 160);
+
+    // Case 2: Line crossing two opposite edges
+    clipLine(250, 60, 250, 290);
+
+    // Case 3: Completely outside line
+    clipLine(430, 120, 470, 220);
+
+    getch();
+    closegraph();
+}
